@@ -1,0 +1,31 @@
+name: DevSecOps Security Pipeline
+
+on:
+  push:
+    branches: [ main ]  # Triggers every time you push to main
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      # THE "SEC" IN DEVSECOPS: Automated Vulnerability Scanning
+      - name: Run Security Audit
+        run: npm audit --audit-level=high
+        # This will fail the build if high-risk vulnerabilities are found!
+
+      - name: Run Linting
+        run: npm run lint
