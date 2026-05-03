@@ -5,6 +5,7 @@ This file helps you explain how the code matches the architecture and security d
 ## Input protection
 - Client-side regex validation in React forms
 - Server-side regex validation using Zod in `backend/src/utils/validators.ts`
+- Registration includes strict email regex validation on both frontend and backend
 - SQLite queries use parameters rather than string concatenation
 
 ## Password storage
@@ -39,3 +40,7 @@ This file helps you explain how the code matches the architecture and security d
 
 ## Audit and monitoring
 - Security events logged to `backend/data/audit.log`
+
+## DevSecOps pipeline
+- GitHub Actions CI runs on push and pull request using `.github/workflows/ci.yml`
+- Pipeline installs dependencies and runs project build checks automatically
