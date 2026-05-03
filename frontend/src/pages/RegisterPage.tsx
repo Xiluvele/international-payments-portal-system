@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { registerUser } from '../api/auth';
 
 const patterns = {
+  email: /^[A-Za-z0-9._%+-]{3,64}@[A-Za-z0-9.-]{2,253}\.[A-Za-z]{2,24}$/,
   fullName: /^[A-Za-z ]{2,50}$/,
   idNumber: /^\d{13}$/,
   accountNumber: /^\d{8,20}$/,
@@ -10,6 +11,7 @@ const patterns = {
 };
 
 const fieldErrorMessages: Record<keyof typeof patterns, string> = {
+  email: 'Enter a valid email address (e.g. name@example.com).',
   fullName: '2–50 characters. Letters and spaces only — no numbers or special characters.',
   idNumber: 'Must be exactly 13 digits.',
   accountNumber: '8–20 digits. Numbers only.',
@@ -20,7 +22,7 @@ type FieldErrors = Partial<Record<keyof typeof patterns, string>>;
 
 export function RegisterPage({ csrfToken }: { csrfToken: string }) {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ fullName: '', idNumber: '', accountNumber: '', password: '' });
+  const [form, setForm] = useState({ email: '', fullName: '', idNumber: '', accountNumber: '', password: '' });
   const [message, setMessage] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -58,6 +60,17 @@ export function RegisterPage({ csrfToken }: { csrfToken: string }) {
       <h2>Create account</h2>
       <p>Passwords are hashed and salted on the server with bcrypt.</p>
       <form onSubmit={handleSubmit} className="form-grid">
+        <label>
+          Email
+          <input
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className={fieldErrors.email ? 'input-error' : ''}
+            placeholder="e.g. jane@example.com"
+            required
+          />
+          {fieldErrors.email && <span className="field-error">{fieldErrors.email}</span>}
+        </label>
         <label>
           Full name
           <input

@@ -50,6 +50,11 @@ The portal allows a customer to:
 - audit logging for suspicious events
 
 ## Mapping to assignment requirements
+### 0. What was built (required portal features)
+- User registration
+- User login
+- International payment form (simulated payment flow)
+
 ### 1. Password security is enforced with hashing and salting
 Passwords are hashed using bcrypt before storage. Plain text passwords are never stored.
 
@@ -60,9 +65,14 @@ Main files:
 ### 2. Whitelist all input using RegEx patterns
 Inputs are validated using whitelist patterns on both the frontend and backend.
 
-Examples:
-- username allows only approved characters
+Guide-required fields covered:
+- email allows only approved email characters and format
+- name allows letters and spaces only
+- payment amount allows positive numeric format with max 2 decimal places
 - account number allows digits only
+- IBAN/account equivalent for this project: account number and SWIFT validation
+
+Additional fields covered:
 - SWIFT code allows uppercase letters and digits in valid lengths
 - currency code allows 3 uppercase letters
 
@@ -71,7 +81,7 @@ Main files:
 - frontend form pages in `frontend/src/pages/`
 
 ### 3. Ensure all traffic is served over SSL
-The application is configured for HTTPS local development using self-signed certificates.
+The application is configured for HTTPS local development using self-signed certificates. For hosted deployment, use platform-managed HTTPS (e.g. Vercel/Netlify/Firebase).
 
 Main files:
 - `backend/src/server.ts`
@@ -100,6 +110,11 @@ The following attacks are addressed in the implementation:
 - SameSite cookies
 - token expiry
 
+#### Man-in-the-middle (MitM) reduction
+- HTTPS-only server endpoints
+- HSTS enabled in production mode
+- secure cookie transport only over TLS
+
 #### CSRF
 - CSRF middleware and token endpoint
 
@@ -112,6 +127,26 @@ The following attacks are addressed in the implementation:
 ### 5. Include a video showing the system works
 A demo script is included in:
 - `docs/DEMO-VIDEO-SCRIPT.md`
+
+## Ethical disclosure (tools used)
+This project was developed using a code editor and AI assistant tooling (e.g., Cursor AI / ChatGPT-style assistance) to speed up scaffolding and documentation.
+
+All generated code was reviewed and understood by the team. Security-critical controls were implemented and verified in code (bcrypt hashing, HTTPS/TLS, CSRF, rate limiting, secure cookies, security headers, and regex allowlists) rather than relying on “visual logic” or unverified snippets.
+
+Why this is safer than insecure custom code:
+- managed guidance reduced implementation mistakes in repetitive security boilerplate
+- all security controls were still validated in our own code and tested during the demo flow
+- we did not claim generated code as unexplained manual work; all controls are documented and narrated
+
+## DevSecOps pipeline (CI/CD)
+The repository includes a basic CI pipeline that runs on every push and pull request and performs:
+- dependency install
+- build (TypeScript compile + frontend bundle)
+
+This automation helps security by ensuring changes are consistently built and checked, reducing the risk of “works on my machine” drift and catching breaking changes early.
+
+Pipeline file:
+- `.github/workflows/ci.yml`
 
 ## How to run the project
 ### Prerequisites

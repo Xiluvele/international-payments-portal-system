@@ -43,14 +43,20 @@ export async function registerUser(input: RegisterInput) {
     throw new Error('Account number already registered.');
   }
 
+  const existingEmail = await db.get('SELECT id FROM users WHERE email = ?', input.email);
+  if (existingEmail) {
+    throw new Error('Email address already registered.');
+  }
+
   if (WEAK_PASSWORDS.includes(input.password)) {
     throw new Error('Password is too common. Choose a stronger one.');
   }
 
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
   const result = await db.run(
-    'INSERT INTO users (username, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO users (username, email, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
     input.accountNumber,
+    input.email,
     input.fullName,
     input.idNumber,
     passwordHash,
@@ -70,10 +76,10 @@ export async function seedEmployees() {
   const hash = await bcrypt.hash('BankEmployee@1', SALT_ROUNDS);
 
   const employees = [
-    { username: '10000000', fullName: 'Bank Employee',    idNumber: '0000000000000' },
-    { username: '10000001', fullName: 'TalinUser',        idNumber: '0000000000001' },
-    { username: '10000002', fullName: 'NokubongaUser',    idNumber: '0000000000002' },
-    { username: '10000003', fullName: 'SimaUser',         idNumber: '0000000000003' },
+    { username: '10000000', email: 'employee0@bank.local', fullName: 'Bank Employee',    idNumber: '0000000000000' },
+    { username: '10000001', email: 'employee1@bank.local', fullName: 'TalinUser',        idNumber: '0000000000001' },
+    { username: '10000002', email: 'employee2@bank.local', fullName: 'NokubongaUser',    idNumber: '0000000000002' },
+    { username: '10000003', email: 'employee3@bank.local', fullName: 'SimaUser',         idNumber: '0000000000003' },
   ];
 
   let seededAny = false;
@@ -81,8 +87,9 @@ export async function seedEmployees() {
     const existing = await db.get('SELECT id FROM users WHERE username = ?', emp.username);
     if (!existing) {
       await db.run(
-        'INSERT INTO users (username, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO users (username, email, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
         emp.username,
+        emp.email,
         emp.fullName,
         emp.idNumber,
         hash,
@@ -107,10 +114,16 @@ export async function loginUser(input: LoginInput) {
   const user = await db.get<{
     id: number;
     username: string;
+    email: string;
     full_name: string;
     role: string;
     password_hash: string;
-  }>('SELECT id, username, full_name, role, password_hash FROM users WHERE full_name = ? AND username = ?', input.username, input.accountNumber);
+  }>(
+    'SELECT id, username, email, full_name, role, password_hash FROM users WHERE (full_name = ? OR email = ?) AND username = ?',
+    input.username,
+    input.username,
+    input.accountNumber,
+  );
 
   if (!user) {
     throw new Error('Invalid username or password.');
