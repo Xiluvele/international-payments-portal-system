@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { dbPromise } from './db.js';
 import { env } from '../config/env.js';
-import type { LoginInput, RegisterInput } from '../utils/validators.js';
+import { regexRules, type LoginInput, type RegisterInput } from '../utils/validators.js';
 
 const SALT_ROUNDS = 12;
 
@@ -37,13 +37,14 @@ export async function revokeToken(token: string) {
 
 export async function registerUser(input: RegisterInput) {
   const db = await dbPromise;
+  const emailNormalized = input.email.trim().toLowerCase();
   const existing = await db.get('SELECT id FROM users WHERE username = ?', input.accountNumber);
 
   if (existing) {
     throw new Error('Account number already registered.');
   }
 
-  const existingEmail = await db.get('SELECT id FROM users WHERE email = ?', input.email);
+  const existingEmail = await db.get('SELECT id FROM users WHERE lower(email) = ?', emailNormalized);
   if (existingEmail) {
     throw new Error('Email address already registered.');
   }
@@ -56,7 +57,7 @@ export async function registerUser(input: RegisterInput) {
   const result = await db.run(
     'INSERT INTO users (username, email, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
     input.accountNumber,
-    input.email,
+    emailNormalized,
     input.fullName,
     input.idNumber,
     passwordHash,
@@ -71,46 +72,59 @@ export async function registerUser(input: RegisterInput) {
   };
 }
 
+/** Demo password meets backend + frontend password policy (upper, lower, digit, special). */
+const EMPLOYEE_DEMO_PASSWORD = 'BankEmployee@1';
+
 export async function seedEmployees() {
   const db = await dbPromise;
-  const hash = await bcrypt.hash('BankEmployee@1', SALT_ROUNDS);
+  const hash = await bcrypt.hash(EMPLOYEE_DEMO_PASSWORD, SALT_ROUNDS);
 
+  // Emails are valid RFC-style addresses for the login form; full names match register/login rules.
   const employees = [
-    { username: '10000000', email: 'employee0@bank.local', fullName: 'Bank Employee',    idNumber: '0000000000000' },
-    { username: '10000001', email: 'employee1@bank.local', fullName: 'TalinUser',        idNumber: '0000000000001' },
-    { username: '10000002', email: 'employee2@bank.local', fullName: 'NokubongaUser',    idNumber: '0000000000002' },
-    { username: '10000003', email: 'employee3@bank.local', fullName: 'SimaUser',         idNumber: '0000000000003' },
+    { username: '10000000', email: 'bank.employee@bank.local', fullName: 'Bank Employee', idNumber: '0000000000000' },
+    { username: '10000001', email: 'talinuser@bank.local', fullName: 'TalinUser', idNumber: '0000000000001' },
+    { username: '10000002', email: 'nokubongauser@bank.local', fullName: 'NokubongaUser', idNumber: '0000000000002' },
+    { username: '10000003', email: 'simauser@bank.local', fullName: 'SimaUser', idNumber: '0000000000003' },
   ];
 
-  let seededAny = false;
   for (const emp of employees) {
-    const existing = await db.get('SELECT id FROM users WHERE username = ?', emp.username);
-    if (!existing) {
+    const emailNorm = emp.email.trim().toLowerCase();
+    const existing = await db.get<{ id: number }>('SELECT id FROM users WHERE username = ?', emp.username);
+    if (existing) {
+      await db.run(
+        `UPDATE users SET email = ?, full_name = ?, password_hash = ?, role = 'employee' WHERE username = ?`,
+        emailNorm,
+        emp.fullName,
+        hash,
+        emp.username,
+      );
+    } else {
       await db.run(
         'INSERT INTO users (username, email, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
         emp.username,
-        emp.email,
+        emailNorm,
         emp.fullName,
         emp.idNumber,
         hash,
         'employee',
       );
-      seededAny = true;
     }
   }
 
-  if (seededAny) {
-    console.log('\n--- Employee accounts seeded ---');
-    for (const emp of employees) {
-      console.log(`  Full name: ${emp.fullName.padEnd(16)} Account: ${emp.username}`);
-    }
-    console.log('  (See deployment docs for credentials)');
-    console.log('--------------------------------\n');
+  console.log('\n--- Employee demo accounts (password for all: BankEmployee@1) ---');
+  console.log('  Full name          Account    Email (or use full name on login)');
+  for (const emp of employees) {
+    console.log(
+      `  ${emp.fullName.padEnd(18)} ${emp.username}   ${emp.email.toLowerCase()}`,
+    );
   }
+  console.log('------------------------------------------------------------------\n');
 }
 
 export async function loginUser(input: LoginInput) {
   const db = await dbPromise;
+  const rawId = input.username.trim();
+  const identifierForMatch = regexRules.email.test(rawId) ? rawId.toLowerCase() : rawId;
   const user = await db.get<{
     id: number;
     username: string;
@@ -119,10 +133,13 @@ export async function loginUser(input: LoginInput) {
     role: string;
     password_hash: string;
   }>(
-    'SELECT id, username, email, full_name, role, password_hash FROM users WHERE (full_name = ? OR email = ?) AND username = ?',
-    input.username,
-    input.username,
+    `SELECT id, username, email, full_name, role, password_hash FROM users
+     WHERE username = ?
+     AND (full_name = ? OR email = ? OR lower(email) = ?)`,
     input.accountNumber,
+    rawId,
+    rawId,
+    identifierForMatch,
   );
 
   if (!user) {
