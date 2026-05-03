@@ -58,9 +58,10 @@ authRouter.post('/login', authRateLimit, csrfProtection, async (req, res) => {
   }
 });
 
-authRouter.post('/logout', (req, res) => {
+// ✅ async added, await added to revokeToken
+authRouter.post('/logout', async (req, res) => {
   const token = req.cookies?.[env.cookieName];
-  if (token) revokeToken(token);
+  if (token) await revokeToken(token);
   res.clearCookie(env.cookieName);
   return res.json({ message: 'Logged out successfully.' });
 });

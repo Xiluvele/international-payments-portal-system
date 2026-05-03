@@ -9,22 +9,26 @@ const SALT_ROUNDS = 12;
 
 const WEAK_PASSWORDS = ['Password1!', 'Admin123!', 'Welcome1@'];
 
-// jti -> expiry timestamp (ms). Pruned on each verify to prevent unbounded growth.
-const tokenBlacklist = new Map<string, number>();
+// ✅ REMOVED: in-memory tokenBlacklist Map
+// ✅ REMOVED: pruneBlacklist function
+// These are now handled by SQLite
 
-function pruneBlacklist() {
-  const now = Date.now();
-  for (const [jti, expiresAt] of tokenBlacklist) {
-    if (now > expiresAt) tokenBlacklist.delete(jti);
-  }
-}
-
-export function revokeToken(token: string) {
+export async function revokeToken(token: string) {
   try {
     const payload = jwt.decode(token) as { jti?: string; exp?: number } | null;
     if (payload?.jti) {
       const expiresAt = payload.exp ? payload.exp * 1000 : Date.now() + 15 * 60 * 1000;
-      tokenBlacklist.set(payload.jti, expiresAt);
+      const db = await dbPromise;
+
+      // ✅ Save revoked token to SQLite
+      await db.run(
+        'INSERT OR IGNORE INTO token_blacklist (jti, expires_at) VALUES (?, ?)',
+        payload.jti,
+        expiresAt,
+      );
+
+      // ✅ Clean up expired tokens
+      await db.run('DELETE FROM token_blacklist WHERE expires_at < ?', Date.now());
     }
   } catch {
     // malformed token — nothing to revoke
@@ -129,8 +133,8 @@ export function signJwt(user: { id: number; username: string; fullName: string; 
   return jwt.sign({ ...user, jti: crypto.randomUUID() }, env.jwtSecret, { expiresIn: '15m' });
 }
 
-export function verifyJwt(token: string) {
-  pruneBlacklist();
+// ✅ Now async — checks SQLite instead of memory
+export async function verifyJwt(token: string) {
   const payload = jwt.verify(token, env.jwtSecret) as {
     id: number;
     username: string;
@@ -138,8 +142,16 @@ export function verifyJwt(token: string) {
     role: string;
     jti: string;
   };
-  if (tokenBlacklist.has(payload.jti)) {
+
+  const db = await dbPromise;
+  const revoked = await db.get(
+    'SELECT jti FROM token_blacklist WHERE jti = ?',
+    payload.jti,
+  );
+
+  if (revoked) {
     throw new Error('Token has been revoked.');
   }
+
   return payload;
 }

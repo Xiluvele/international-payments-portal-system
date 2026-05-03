@@ -101,8 +101,7 @@ Create one through the Register page.
 
 ## Repository scripts
 
-```bash
-npm run dev            # start backend + frontend
+```bash           # start backend + frontend
 npm run build          # build both
 npm run lint           # lint both
 npm run install:all    # install workspace dependencies
