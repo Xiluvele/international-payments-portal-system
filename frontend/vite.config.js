@@ -10,6 +10,10 @@ export default defineConfig({
             cert: fs.readFileSync(path.resolve(__dirname, '../certs/localhost.pem')),
             key: fs.readFileSync(path.resolve(__dirname, '../certs/localhost-key.pem')),
         },
+        headers: {
+            'X-Frame-Options': 'DENY',
+            'Content-Security-Policy': "frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; object-src 'none';",
+        },
         proxy: {
             '/api': {
                 target: 'https://localhost:5001',

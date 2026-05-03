@@ -1,3 +1,20 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+
+const dbDirectory = path.resolve(process.cwd(), 'data');
+const dbPath = path.join(dbDirectory, 'app.db');
+
+export const dbPromise = (async () => {
+  fs.mkdirSync(dbDirectory, { recursive: true });
+
+  return open({
+    filename: dbPath,
+    driver: sqlite3.Database,
+  });
+})();
+
 export async function initDb() {
   const db = await dbPromise;
 

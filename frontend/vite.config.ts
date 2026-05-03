@@ -11,10 +11,10 @@ export default defineConfig({
       cert: fs.readFileSync(path.resolve(__dirname, '../certs/localhost.pem')),
       key: fs.readFileSync(path.resolve(__dirname, '../certs/localhost-key.pem')),
     },
-    // ADD THIS SECTION BELOW
     headers: {
       'X-Frame-Options': 'DENY',
-       'Content-Security-Policy': "frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; object-src 'none';",
+      'Content-Security-Policy':
+        "frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; object-src 'none';",
     },
     proxy: {
       '/api': {
