@@ -1,9 +1,13 @@
 import { apiFetch } from './client';
 import type { Payment } from '../types';
 
+function csrfHeaders(csrfToken: string): HeadersInit {
+  return { 'X-CSRF-Token': csrfToken };
+}
+
 export async function fetchPayments(csrfToken: string) {
   return apiFetch<{ payments: Payment[] }>('/api/payments', {
-    headers: { 'CSRF-Token': csrfToken },
+    headers: csrfHeaders(csrfToken),
   });
 }
 
@@ -20,14 +24,14 @@ export async function createPayment(
 ) {
   return apiFetch<{ message: string; payment: Payment }>('/api/payments', {
     method: 'POST',
-    headers: { 'CSRF-Token': csrfToken },
+    headers: csrfHeaders(csrfToken),
     body: JSON.stringify(payload),
   });
 }
 
 export async function fetchAllPayments(csrfToken: string) {
   return apiFetch<{ payments: Payment[] }>('/api/payments/all', {
-    headers: { 'CSRF-Token': csrfToken },
+    headers: csrfHeaders(csrfToken),
   });
 }
 
@@ -36,7 +40,7 @@ export async function verifyPayment(csrfToken: string, paymentId: number) {
     `/api/payments/${paymentId}/verify`,
     {
       method: 'PATCH',
-      headers: { 'CSRF-Token': csrfToken },
+      headers: csrfHeaders(csrfToken),
     },
   );
 }
@@ -44,6 +48,6 @@ export async function verifyPayment(csrfToken: string, paymentId: number) {
 export async function submitToSwift(csrfToken: string) {
   return apiFetch<{ message: string; submittedCount: number }>('/api/payments/submit-to-swift', {
     method: 'POST',
-    headers: { 'CSRF-Token': csrfToken },
+    headers: csrfHeaders(csrfToken),
   });
 }
