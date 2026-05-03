@@ -4,12 +4,12 @@ import { loginUser } from '../api/auth';
 import type { User } from '../types';
 
 const patterns = {
-  fullName: /^[A-Za-z ]{2,50}$/,
+  identifier: /^(?:[A-Za-z ]{2,50}|[A-Za-z0-9._%+-]{3,64}@[A-Za-z0-9.-]{2,253}\.[A-Za-z]{2,24})$/,
   accountNumber: /^\d{8,20}$/,
 };
 
 const fieldErrorMessages = {
-  fullName: '2–50 characters. Letters and spaces only.',
+  identifier: 'Enter a valid full name or email address.',
   accountNumber: '8–20 digits. Numbers only.',
 };
 
@@ -17,7 +17,7 @@ type FieldErrors = Partial<Record<keyof typeof patterns, string>>;
 
 export function LoginPage({ onLogin, csrfToken }: { onLogin: (user: User) => void; csrfToken: string }) {
   const navigate = useNavigate();
-  const [fullName, setFullName] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -28,7 +28,7 @@ export function LoginPage({ onLogin, csrfToken }: { onLogin: (user: User) => voi
     setError('');
 
     const errors: FieldErrors = {};
-    if (!patterns.fullName.test(fullName)) errors.fullName = fieldErrorMessages.fullName;
+    if (!patterns.identifier.test(identifier)) errors.identifier = fieldErrorMessages.identifier;
     if (!patterns.accountNumber.test(accountNumber)) errors.accountNumber = fieldErrorMessages.accountNumber;
 
     if (Object.keys(errors).length > 0) {
@@ -38,7 +38,7 @@ export function LoginPage({ onLogin, csrfToken }: { onLogin: (user: User) => voi
     setFieldErrors({});
 
     try {
-      const response = await loginUser(csrfToken, { username: fullName, accountNumber, password });
+      const response = await loginUser(csrfToken, { username: identifier, accountNumber, password });
       onLogin(response.user);
       navigate('/');
     } catch (err) {
@@ -52,15 +52,15 @@ export function LoginPage({ onLogin, csrfToken }: { onLogin: (user: User) => voi
       <p>Use your <strong>full name</strong> as your username. The session is stored in a Secure, HttpOnly cookie.</p>
       <form onSubmit={handleSubmit} className="form-grid">
         <label>
-          Full name <span className="field-hint">(your username)</span>
+          Full name or email <span className="field-hint">(your username)</span>
           <input
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className={fieldErrors.fullName ? 'input-error' : ''}
-            placeholder="e.g. Jane Smith"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            className={fieldErrors.identifier ? 'input-error' : ''}
+            placeholder="e.g. Jane Smith or jane@example.com"
             required
           />
-          {fieldErrors.fullName && <span className="field-error">{fieldErrors.fullName}</span>}
+          {fieldErrors.identifier && <span className="field-error">{fieldErrors.identifier}</span>}
         </label>
         <label>
           Account number

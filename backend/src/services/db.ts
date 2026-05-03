@@ -5,6 +5,7 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL DEFAULT '',
       full_name TEXT NOT NULL,
       id_number TEXT NOT NULL DEFAULT '',
       password_hash TEXT NOT NULL,
@@ -16,6 +17,10 @@ export async function initDb() {
   // Migrations for existing databases
   try { await db.exec(`ALTER TABLE users ADD COLUMN id_number TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'customer'`); } catch { /* exists */ }
+  try { await db.exec(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+
+  // Ensure email uniqueness for non-empty emails (SQLite doesn't support adding UNIQUE constraints via ALTER TABLE)
+  try { await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email <> ''`); } catch { /* exists */ }
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS payments (
