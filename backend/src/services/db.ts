@@ -1,14 +1,3 @@
-import path from 'node:path';
-import { open } from 'sqlite';
-import sqlite3 from 'sqlite3';
-
-const dbPath = path.resolve(process.cwd(), 'data', 'portal.db');
-
-export const dbPromise = open({
-  filename: dbPath,
-  driver: sqlite3.Database,
-});
-
 export async function initDb() {
   const db = await dbPromise;
 
@@ -49,4 +38,12 @@ export async function initDb() {
   // Migrations for existing databases
   try { await db.exec(`ALTER TABLE payments ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`); } catch { /* exists */ }
   try { await db.exec(`ALTER TABLE payments ADD COLUMN verified_by INTEGER REFERENCES users(id)`); } catch { /* exists */ }
+
+  // ✅ ADD THIS AT THE BOTTOM
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS token_blacklist (
+      jti TEXT PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    );
+  `);
 }

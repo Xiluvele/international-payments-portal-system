@@ -2,7 +2,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { env } from '../config/env.js';
 import { verifyJwt } from '../services/authService.js';
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+// ✅ Now async to match verifyJwt being async
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.[env.cookieName];
 
   if (!token) {
@@ -10,7 +11,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    req.user = verifyJwt(token);
+    req.user = await verifyJwt(token); // ✅ await added
     next();
   } catch {
     return res.status(401).json({ message: 'Invalid or expired session.' });
