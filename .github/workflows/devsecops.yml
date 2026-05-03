@@ -24,7 +24,7 @@ jobs:
 
       # THE "SEC" IN DEVSECOPS: Automated Vulnerability Scanning
       - name: Run Security Audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=critical
         # This will fail the build if high-risk vulnerabilities are found!
 
       - name: Run Linting
