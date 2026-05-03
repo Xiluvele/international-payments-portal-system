@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const regexRules = {
   username: /^[A-Za-z0-9._-]{3,30}$/,
+  email: /^[A-Za-z0-9._%+-]{3,64}@[A-Za-z0-9.-]{2,253}\.[A-Za-z]{2,24}$/,
   fullName: /^[A-Za-z ]{2,50}$/,
   password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]).{8,64}$/,
   idNumber: /^\d{13}$/,
@@ -14,14 +15,20 @@ export const regexRules = {
 };
 
 export const registerSchema = z.object({
+  email: z.string().regex(regexRules.email),
   fullName: z.string().regex(regexRules.fullName),
   idNumber: z.string().regex(regexRules.idNumber),
   accountNumber: z.string().regex(regexRules.accountNumber),
   password: z.string().regex(regexRules.password),
 });
 
+const loginIdentifierSchema = z.string().refine(
+  (value) => regexRules.fullName.test(value) || regexRules.email.test(value),
+  { message: 'Identifier must be a valid full name or email address.' },
+);
+
 export const loginSchema = z.object({
-  username: z.string().regex(regexRules.fullName),
+  username: loginIdentifierSchema,
   accountNumber: z.string().regex(regexRules.accountNumber),
   password: z.string().min(8).max(64),
 });
