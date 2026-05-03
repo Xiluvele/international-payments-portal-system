@@ -3,13 +3,13 @@ import path from 'node:path';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 
-const dataDir = path.resolve(process.cwd(), 'data');
-const dbFile = path.join(dataDir, 'dev.db');
+const dbDirectory = path.resolve(process.cwd(), 'data');
+const dbPath = path.join(dbDirectory, 'app.db');
 
-fs.mkdirSync(dataDir, { recursive: true });
+fs.mkdirSync(dbDirectory, { recursive: true });
 
 export const dbPromise = open({
-  filename: dbFile,
+  filename: dbPath,
   driver: sqlite3.Database,
 });
 

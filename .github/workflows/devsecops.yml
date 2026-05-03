@@ -2,9 +2,9 @@ name: DevSecOps Security Pipeline
 
 on:
   push:
-    branches: [ main ]  # Triggers every time you push to main
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build-and-test:
@@ -17,15 +17,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.x'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
-      # THE "SEC" IN DEVSECOPS: Automated Vulnerability Scanning
       - name: Run Security Audit
-        run: npm audit --audit-level=critical
-        # This will fail the build if high-risk vulnerabilities are found!
+        run: npm audit --workspaces --audit-level=critical
 
       - name: Run Linting
         run: npm run lint
+
+      - name: Run Build
+        run: npm run build
