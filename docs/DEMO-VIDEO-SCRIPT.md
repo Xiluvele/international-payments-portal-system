@@ -56,6 +56,10 @@ Show the URL bar and say:
 
 The application is running over HTTPS, which supports the assignment requirement that traffic must be served securely over SSL or TLS.
 
+Also show:
+- the browser security indicator (lock/tune icon) for HTTPS
+- certificate details showing validity for `localhost`
+
 ### 5. Register a user
 Go to the register page and say:
 
@@ -103,6 +107,7 @@ Say:
 Now I will show input validation using whitelist regex patterns.
 
 Try examples like:
+- invalid email address during registration (e.g. missing @)
 - letters in account number
 - invalid SWIFT code
 - invalid currency format
@@ -124,8 +129,22 @@ Then explain briefly:
 - CSRF protection is enabled
 - rate limiting helps against brute force and basic denial of service attempts
 - security headers are set using Helmet
+- session hijacking is reduced by HttpOnly + Secure + SameSite cookies and short token lifetime
+- MitM risk is reduced by HTTPS/TLS transport and HSTS policy in production
 
-### 11. Show one code example
+### 11. Explain CI/CD pipeline (required)
+Say:
+
+This repository includes a basic CI/CD pipeline that runs on every push and pull request.
+
+Show:
+- `.github/workflows/ci.yml`
+
+Then say:
+
+Automation improves security because every change is built and validated consistently before merge or release.
+
+### 12. Show one code example
 Open one or two files and say:
 
 Here is the password hashing implementation.
@@ -144,12 +163,12 @@ Optional:
 Show security middleware in:
 - `backend/src/middleware/security.ts`
 
-### 12. Link back to Part 1
+### 13. Link back to Part 1
 Say:
 
 This implementation was based on the security architecture and controls identified in Part 1, including secure input handling, protection of data in transit, secure session handling, and hardening against common attacks.
 
-### 13. Closing
+### 14. Closing
 Say:
 
 In conclusion, this project demonstrates a secure customer international payments portal that meets the main Task 2 requirements. Thank you.

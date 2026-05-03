@@ -3,7 +3,7 @@
 **Module:** APDS7311  
 **Application:** Secure International Payments Portal  
 **Stack:** Node.js · Express · TypeScript · React · SQLite  
-**Date:** 2026-04-27
+**Date:** 2026-05-03
 
 ---
 
@@ -98,7 +98,8 @@ Every database interaction uses the `sqlite` library's parameterised query inter
 ```typescript
 // backend/src/services/authService.ts
 const user = await db.get(
-  'SELECT id, username, full_name, role, password_hash FROM users WHERE full_name = ? AND username = ?',
+  'SELECT id, username, email, full_name, role, password_hash FROM users WHERE (full_name = ? OR email = ?) AND username = ?',
+  input.username,
   input.username,
   input.accountNumber,
 );
@@ -330,6 +331,7 @@ Every field is validated against a strict allowlist pattern on both the frontend
 
 | Field | Pattern | Allowed |
 |---|---|---|
+| Email | `/^[A-Za-z0-9._%+-]{3,64}@[A-Za-z0-9.-]{2,253}\.[A-Za-z]{2,24}$/` | Standard email format with strict allowlist |
 | Full name | `/^[A-Za-z ]{2,50}$/` | Letters and spaces only |
 | ID number | `/^\d{13}$/` | Exactly 13 digits |
 | Account number | `/^\d{8,20}$/` | 8–20 digits only |
@@ -572,6 +574,30 @@ Every entry includes an ISO timestamp, event type, IP address, and relevant cont
 | DoS via rate abuse | Three-tier rate limiting (global, auth, payment) | `security.ts`, route files |
 | Privilege escalation | JWT `requireAuth` guard, `requireEmployee` role guard, role in JWT | `authMiddleware.ts`, `paymentRoutes.ts` |
 | Audit trail tampering | Append-only structured JSON log with timestamps and IP addresses | `auditLogger.ts` |
+
+---
+
+## DevSecOps CI/CD Evidence
+
+### Pipeline implemented
+A CI pipeline is configured in GitHub Actions and runs automatically on every push and pull request:
+
+```yaml
+# .github/workflows/ci.yml
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+```
+
+### Security value
+- **Consistency:** every change follows the same build checks, reducing release drift.
+- **Early detection:** broken or risky changes are caught before merge/deployment.
+- **Traceability:** CI logs provide an auditable history of build validation for each commit.
+
+### Pipeline checks
+- Install dependencies (`npm ci` + workspace install)
+- Build backend and frontend (`npm run build`)
 
 ---
 
