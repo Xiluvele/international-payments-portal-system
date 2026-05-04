@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { createApp } from './app.js';
@@ -11,6 +12,16 @@ async function start() {
   await seedEmployees();
 
   const app = createApp();
+  const isProduction = env.nodeEnv === 'production';
+
+  // Render/PAAS must bind publicly on 0.0.0.0 over plain HTTP.
+  if (isProduction) {
+    const httpServer = http.createServer(app);
+    httpServer.listen(env.port, '0.0.0.0', () => {
+      console.log(`API running at http://0.0.0.0:${env.port}`);
+    });
+    return;
+  }
 
   // In production set CERT_PATH and KEY_PATH to Let's Encrypt paths:
   //   CERT_PATH=/etc/letsencrypt/live/<domain>/fullchain.pem
