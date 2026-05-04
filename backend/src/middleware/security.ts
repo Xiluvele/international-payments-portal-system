@@ -7,16 +7,38 @@ import helmet from 'helmet';
 import type { Express, Request, Response, NextFunction } from 'express';
 import { env, isProduction } from '../config/env.js';
 
+const devFrontendOrigins = new Set([
+  env.frontendOrigin,
+  'https://localhost:5173',
+  'https://127.0.0.1:5173',
+]);
+
+function corsOrigin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+  if (isProduction) {
+    callback(null, origin === env.frontendOrigin);
+    return;
+  }
+  callback(null, devFrontendOrigins.has(origin));
+}
+
 export function applySecurity(app: Express) {
   app.disable('x-powered-by');
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
   app.use(
     cors({
-      origin: env.frontendOrigin,
+      origin: corsOrigin,
       credentials: true,
     }),
   );
+
+  const connectSrc = isProduction
+    ? ["'self'", env.frontendOrigin]
+    : ["'self'", ...devFrontendOrigins];
 
   app.use(
     helmet({
@@ -29,7 +51,7 @@ export function applySecurity(app: Express) {
           scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           imgSrc: ["'self'", 'data:'],
-          connectSrc: ["'self'", env.frontendOrigin],
+          connectSrc,
           frameAncestors: ["'none'"],
         },
       },

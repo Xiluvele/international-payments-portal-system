@@ -104,6 +104,34 @@ input {
   margin-top: 0.25rem;
 }
 
+.password-input-wrap {
+  position: relative;
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.password-input-wrap input {
+  margin-top: 0;
+  padding-right: 4rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.4rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #111827;
+  border-radius: 8px;
+}
+
+.password-toggle:hover {
+  background: #d1d5db;
+}
+
 .loading {
   display: grid;
   place-items: center;

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
   server: {
     port: 5173,
@@ -13,8 +13,12 @@ export default defineConfig({
     },
     headers: {
       'X-Frame-Options': 'DENY',
-      'Content-Security-Policy':
-        "frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; object-src 'none';",
+      ...(command === 'serve'
+        ? {
+            'Content-Security-Policy':
+              "frame-ancestors 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws: wss:; object-src 'none';",
+          }
+        : {}),
     },
     proxy: {
       '/api': {
@@ -24,4 +28,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

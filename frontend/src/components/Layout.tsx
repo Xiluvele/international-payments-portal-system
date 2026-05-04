@@ -3,11 +3,16 @@ import type { PropsWithChildren } from 'react';
 import type { User } from '../types';
 import { logoutUser } from '../api/auth';
 
-export function Layout({ children, user, onLogout }: PropsWithChildren<{ user: User | null; onLogout: () => void }>) {
+export function Layout({
+  children,
+  user,
+  csrfToken,
+  onLogout,
+}: PropsWithChildren<{ user: User | null; csrfToken: string; onLogout: () => void }>) {
   const navigate = useNavigate();
 
   async function handleLogout() {
-    await logoutUser();
+    await logoutUser(csrfToken);
     onLogout();
     navigate('/login');
   }
