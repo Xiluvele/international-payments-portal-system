@@ -34,7 +34,7 @@ function App() {
   }
 
   return (
-    <Layout user={user} onLogout={() => setUser(null)}>
+    <Layout user={user} csrfToken={csrfToken} onLogout={() => setUser(null)}>
       <Routes>
         <Route path="/register" element={<RegisterPage csrfToken={csrfToken} />} />
         <Route path="/login" element={<LoginPage onLogin={setUser} csrfToken={csrfToken} />} />

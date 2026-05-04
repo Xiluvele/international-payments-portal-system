@@ -10,3 +10,8 @@ backend/data/*.db
 .idea
 frontend/dist
 backend/dist
+
+.vs/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
