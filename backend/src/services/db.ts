@@ -6,14 +6,12 @@ import { open } from 'sqlite';
 const dbDirectory = path.resolve(process.cwd(), 'data');
 const dbPath = path.join(dbDirectory, 'app.db');
 
-export const dbPromise = (async () => {
-  fs.mkdirSync(dbDirectory, { recursive: true });
+fs.mkdirSync(dbDirectory, { recursive: true });
 
-  return open({
-    filename: dbPath,
-    driver: sqlite3.Database,
-  });
-})();
+export const dbPromise = open({
+  filename: dbPath,
+  driver: sqlite3.Database,
+});
 
 export async function initDb() {
   const db = await dbPromise;
@@ -51,6 +49,8 @@ export async function initDb() {
       reference TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       verified_by INTEGER,
+      verified_at TEXT,
+      submitted_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (verified_by) REFERENCES users(id)
@@ -60,6 +60,8 @@ export async function initDb() {
   // Migrations for existing databases
   try { await db.exec(`ALTER TABLE payments ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`); } catch { /* exists */ }
   try { await db.exec(`ALTER TABLE payments ADD COLUMN verified_by INTEGER REFERENCES users(id)`); } catch { /* exists */ }
+  try { await db.exec(`ALTER TABLE payments ADD COLUMN verified_at TEXT`); } catch { /* exists */ }
+  try { await db.exec(`ALTER TABLE payments ADD COLUMN submitted_at TEXT`); } catch { /* exists */ }
 
   // ✅ ADD THIS AT THE BOTTOM
   await db.exec(`

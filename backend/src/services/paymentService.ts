@@ -77,9 +77,18 @@ export async function createPayment(userId: number, input: PaymentInput) {
       ]
     );
 
-    // 🔐 Data Minimization: Return only necessary fields (not full DB row)
+    // Return the same shape expected by frontend payment tables.
     const payment = await db.get(
-      `SELECT id, status, created_at as createdAt 
+      `SELECT id,
+              user_id as userId,
+              beneficiary_name as beneficiaryName,
+              beneficiary_account as beneficiaryAccount,
+              swift_code as swiftCode,
+              currency,
+              amount,
+              reference,
+              status,
+              created_at as createdAt
        FROM payments WHERE id = ?`,
       [result.lastID]
     );
@@ -109,7 +118,16 @@ export async function getPaymentsForUser(userId: number) {
     // 🔐 SQL Injection Prevention: Parameterized query
     // 🔐 Data Minimization: Only return fields needed for UI (mask sensitive data in frontend)
     return db.all(
-      `SELECT id, beneficiary_name as beneficiaryName, currency, amount, reference, status, created_at as createdAt
+      `SELECT id,
+              user_id as userId,
+              beneficiary_name as beneficiaryName,
+              beneficiary_account as beneficiaryAccount,
+              swift_code as swiftCode,
+              currency,
+              amount,
+              reference,
+              status,
+              created_at as createdAt
        FROM payments 
        WHERE user_id = ? 
        ORDER BY datetime(created_at) DESC`,
@@ -131,7 +149,10 @@ export async function getAllPayments() {
     // 🔐 Data Minimization: Join only necessary user fields (not passwords, tokens, etc.)
     return db.all(
       `SELECT p.id, p.user_id as userId, u.full_name as customerName,
-              p.beneficiary_name as beneficiaryName, p.currency, p.amount, p.reference,
+              p.beneficiary_name as beneficiaryName,
+              p.beneficiary_account as beneficiaryAccount,
+              p.swift_code as swiftCode,
+              p.currency, p.amount, p.reference,
               p.status, p.created_at as createdAt
        FROM payments p
        JOIN users u ON p.user_id = u.id

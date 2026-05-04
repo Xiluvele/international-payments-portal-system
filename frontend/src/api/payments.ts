@@ -9,17 +9,17 @@ export const validationPatterns = {
   // SWIFT/BIC: 8 or 11 uppercase alphanumeric chars (ISO 9362)
   swiftCode: /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/,
   
-  // IBAN: 2 letters + 2 digits + 11-30 alphanumeric (simplified ISO 13616)
-  iban: /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/,
+  // Beneficiary account number: 8-20 digits
+  accountNumber: /^\d{8,20}$/,
   
   // Payment amount: positive number, max 2 decimal places, no scientific notation
   amount: /^\d+(\.\d{1,2})?$/,
   
-  // Reference: 1-50 chars, alphanumeric + hyphens/underscores only (prevents injection)
-  reference: /^[A-Za-z0-9\-_]{1,50}$/,
+  // Reference: 2-120 chars, alphanumeric + space + . , _ -
+  reference: /^[A-Za-z0-9 .,_-]{2,120}$/,
   
-  // Beneficiary name: 2-100 chars, letters, spaces, hyphens, apostrophes only
-  beneficiaryName: /^[A-Za-z\s'\-]{2,100}$/
+  // Beneficiary name: 2-80 chars, alphanumeric + spaces + . , ' -
+  beneficiaryName: /^[A-Za-z0-9 .,'-]{2,80}$/
 };
 
 // ============================================================================
@@ -50,8 +50,8 @@ export function sanitizeAndValidatePayment(payload: {
   if (!validationPatterns.beneficiaryName.test(sanitized.beneficiaryName)) {
     errors.push('Invalid beneficiary name format');
   }
-  if (!validationPatterns.iban.test(sanitized.beneficiaryAccount)) {
-    errors.push('Invalid IBAN format');
+  if (!validationPatterns.accountNumber.test(sanitized.beneficiaryAccount)) {
+    errors.push('Invalid beneficiary account number format');
   }
   if (!validationPatterns.swiftCode.test(sanitized.swiftCode)) {
     errors.push('Invalid SWIFT/BIC code format');
