@@ -12,7 +12,7 @@ function setAuthCookie(res: Response, token: string) {
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: true,
-    sameSite: 'strict',
+    sameSite: 'none',
     maxAge: 15 * 60 * 1000,
   });
 }
@@ -58,11 +58,15 @@ authRouter.post('/login', authRateLimit, csrfProtection, async (req, res) => {
   }
 });
 
-// ✅ async added, await added to revokeToken
+//  async added, await added to revokeToken
 authRouter.post('/logout', async (req, res) => {
   const token = req.cookies?.[env.cookieName];
   if (token) await revokeToken(token);
-  res.clearCookie(env.cookieName);
+res.clearCookie(env.cookieName,{
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+    });
   return res.json({ message: 'Logged out successfully.' });
 });
 
