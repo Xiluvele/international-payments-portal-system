@@ -97,7 +97,7 @@ export const paymentRateLimit = rateLimit({
 export const csrfProtection = csrf({
   cookie: {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'none',
     secure: true,
   },
 });
