@@ -12,7 +12,7 @@ jobs:
       - checkout
 
       - run:
-          name: Install dependencies
+          name: Install root dependencies
           command: npm install --include=dev
 
       - run:
@@ -24,11 +24,11 @@ jobs:
 
       - run:
           name: Build frontend
-             command: |
-              cd frontend
-              rm -rf node_modules
-              npm ci --include=dev
-              npm run build
+          command: |
+            cd frontend
+            rm -rf node_modules
+            npm ci --include=dev
+            npm run build
 
       - run:
           name: Run npm audit
