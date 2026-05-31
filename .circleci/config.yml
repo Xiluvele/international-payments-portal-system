@@ -26,6 +26,7 @@ jobs:
           name: Build frontend
           command: |
             cd frontend
+            rm -rf node_modules package-lock.json
             npm install --include=dev
             npm run build
 
