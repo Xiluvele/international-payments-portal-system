@@ -1,0 +1,41 @@
+version: 2.1
+
+orbs:
+  sonarcloud: sonarsource/sonarcloud@3.0.0
+
+jobs:
+  build-and-sonar-scan:
+    docker:
+      - image: cimg/node:20.12
+
+    steps:
+      - checkout
+
+      - run:
+          name: Install dependencies
+          command: npm install --include=dev
+
+      - run:
+          name: Build backend
+          command: |
+            cd backend
+            npm install --include=dev
+            npm run build
+
+      - run:
+          name: Build frontend
+          command: |
+            cd frontend
+            npm install --include=dev
+            npm run build
+
+      - run:
+          name: Run npm audit
+          command: npm audit --audit-level=high || true
+
+      - sonarcloud/scan
+
+workflows:
+  build-scan:
+    jobs:
+      - build-and-sonar-scan
