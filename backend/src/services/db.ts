@@ -1,8 +1,12 @@
+import fs from 'node:fs';
 import path from 'node:path';
-import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
 
-const dbPath = path.resolve(process.cwd(), 'data', 'portal.db');
+const dbDirectory = path.resolve(process.cwd(), 'data');
+const dbPath = path.join(dbDirectory, 'app.db');
+
+fs.mkdirSync(dbDirectory, { recursive: true });
 
 export const dbPromise = open({
   filename: dbPath,
@@ -47,6 +51,8 @@ export async function initDb() {
       reference TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       verified_by INTEGER,
+      verified_at TEXT,
+      submitted_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (verified_by) REFERENCES users(id)
@@ -56,4 +62,14 @@ export async function initDb() {
   // Migrations for existing databases
   try { await db.exec(`ALTER TABLE payments ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`); } catch { /* exists */ }
   try { await db.exec(`ALTER TABLE payments ADD COLUMN verified_by INTEGER REFERENCES users(id)`); } catch { /* exists */ }
+  try { await db.exec(`ALTER TABLE payments ADD COLUMN verified_at TEXT`); } catch { /* exists */ }
+  try { await db.exec(`ALTER TABLE payments ADD COLUMN submitted_at TEXT`); } catch { /* exists */ }
+
+  // ✅ ADD THIS AT THE BOTTOM
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS token_blacklist (
+      jti TEXT PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    );
+  `);
 }

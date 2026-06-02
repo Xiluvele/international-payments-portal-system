@@ -21,6 +21,7 @@ jobs:
       - name: Install workspace dependencies
         run: |
           npm ci
+          npm i -w frontend --no-save @rollup/rollup-linux-x64-gnu
           npm run install:all
 
       - name: Build (typecheck + bundle)

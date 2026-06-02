@@ -143,8 +143,7 @@ After **5 consecutive failed login attempts** on the same account, the account i
 
 ## Repository scripts
 
-```bash
-npm run dev            # start backend + frontend
+```bash           # start backend + frontend
 npm run build          # build both
 npm run lint           # lint both
 npm run install:all    # install workspace dependencies
