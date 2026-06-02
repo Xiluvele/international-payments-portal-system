@@ -3,16 +3,11 @@ import type { PropsWithChildren } from 'react';
 import type { User } from '../types';
 import { logoutUser } from '../api/auth';
 
-export function Layout({
-  children,
-  user,
-  csrfToken,
-  onLogout,
-}: PropsWithChildren<{ user: User | null; csrfToken: string; onLogout: () => void }>) {
+export function Layout({ children, user, onLogout }: PropsWithChildren<{ user: User | null; onLogout: () => void }>) {
   const navigate = useNavigate();
 
   async function handleLogout() {
-    await logoutUser(csrfToken);
+    await logoutUser();
     onLogout();
     navigate('/login');
   }
@@ -25,7 +20,6 @@ export function Layout({
         </div>
         <nav>
           <Link to="/">Dashboard</Link>
-          {!user && <Link to="/register">Register</Link>}
           {!user && <Link to="/login">Login</Link>}
           {user && <button onClick={handleLogout}>Logout</button>}
         </nav>
