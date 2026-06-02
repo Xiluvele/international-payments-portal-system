@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
-import { createPayment, fetchPayments } from '../api/payments';
+import { checkDuplicatePayment, createPayment, fetchPayments } from '../api/payments';
 import type { Payment, User } from '../types';
+import { useTouchedFields } from '../hooks/useTouchedFields';
+import { setFieldError } from '../utils/liveValidate';
+
+// Human-friendly "x ago" from a SQLite UTC timestamp (e.g. "2026-06-02 16:47:43").
+function timeAgo(sqliteUtc: string): string {
+  const then = new Date(sqliteUtc.replace(' ', 'T') + 'Z').getTime();
+  if (Number.isNaN(then)) return 'recently';
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (mins < 1) return 'less than a minute ago';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hrs = Math.round(mins / 60);
+  return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+}
 
 const CURRENCIES = ['ZAR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY', 'CHF', 'CNY'];
 
@@ -11,20 +24,28 @@ const step1Patterns = {
 const step2Patterns = {
   beneficiaryName: /^[A-Za-z0-9 .,'-]{2,80}$/,
   beneficiaryAccount: /^\d{8,20}$/,
-  swiftCode: /^[A-Z0-9]{8}([A-Z0-9]{3})?$/,
+  swiftCode: /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/,
   reference: /^[A-Za-z0-9 .,_-]{2,120}$/,
 };
 
-const step1ErrorMsgs: Record<keyof typeof step1Patterns, string> = {
+type Step1Key = keyof typeof step1Patterns | 'currency';
+
+const step1ErrorMsgs: Record<Step1Key, string> = {
   amount: 'Enter a positive number with up to 2 decimal places (e.g. 1500.00).',
+  currency: 'Choose a valid currency from the list.',
 };
 
 const step2ErrorMsgs: Record<keyof typeof step2Patterns, string> = {
   beneficiaryName: "Enter 2–80 characters. Letters, numbers, spaces, and . , ' - are allowed.",
   beneficiaryAccount: 'Account number must be 8–20 digits only.',
-  swiftCode: 'SWIFT/BIC code must be 8 or 11 uppercase letters and digits (e.g. FIRNZAJJ).',
+  swiftCode:
+    'SWIFT/BIC must be 8 or 11 characters: 6 letters + 2 characters (+ optional 3). Example: DEUTDEFF or FIRNZAJJ.',
   reference: 'Enter 2–120 characters. Letters, numbers, spaces, and . , _ - are allowed.',
 };
+
+function currencyOk(code: string) {
+  return /^[A-Z]{3}$/.test(code) && CURRENCIES.includes(code);
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
@@ -41,7 +62,7 @@ const initialForm = {
   reference: '',
 };
 
-type Step1Errors = Partial<Record<keyof typeof step1Patterns, string>>;
+type Step1Errors = Partial<Record<Step1Key, string>>;
 type Step2Errors = Partial<Record<keyof typeof step2Patterns, string>>;
 
 export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: string }) {
@@ -52,6 +73,8 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
   const [submitError, setSubmitError] = useState('');
   const [s1Errors, setS1Errors] = useState<Step1Errors>({});
   const [s2Errors, setS2Errors] = useState<Step2Errors>({});
+  const step1Touches = useTouchedFields<Step1Key>();
+  const step2Touches = useTouchedFields<keyof typeof step2Patterns>();
 
   useEffect(() => {
     if (!csrfToken) return;
@@ -63,10 +86,13 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
   function handleContinue(event: { preventDefault(): void }) {
     event.preventDefault();
     const errors: Step1Errors = {};
-    for (const key of Object.keys(step1Patterns) as Array<keyof typeof step1Patterns>) {
-      if (!step1Patterns[key].test(form[key])) errors[key] = step1ErrorMsgs[key];
+    if (!step1Patterns.amount.test(form.amount)) errors.amount = step1ErrorMsgs.amount;
+    if (!currencyOk(form.currency)) errors.currency = step1ErrorMsgs.currency;
+    if (Object.keys(errors).length > 0) {
+      step1Touches.markAllTouched(Object.keys(errors) as Step1Key[]);
+      setS1Errors(errors);
+      return;
     }
-    if (Object.keys(errors).length > 0) { setS1Errors(errors); return; }
     setS1Errors({});
     setStep(2);
   }
@@ -79,8 +105,36 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
     for (const key of Object.keys(step2Patterns) as Array<keyof typeof step2Patterns>) {
       if (!step2Patterns[key].test(form[key])) errors[key] = step2ErrorMsgs[key];
     }
-    if (Object.keys(errors).length > 0) { setS2Errors(errors); return; }
+    if (Object.keys(errors).length > 0) {
+      step2Touches.markAllTouched(Object.keys(errors) as Array<keyof typeof step2Patterns>);
+      setS2Errors(errors);
+      return;
+    }
     setS2Errors({});
+
+    // 🟡 Duplicate-payment guard: warn if the same beneficiary account + SWIFT was
+    // already paid in the last 24h, and let the user decide whether to proceed.
+    try {
+      const dup = await checkDuplicatePayment(csrfToken, {
+        beneficiaryAccount: form.beneficiaryAccount,
+        swiftCode: form.swiftCode,
+      });
+      if (dup.duplicate && dup.previous) {
+        const p = dup.previous;
+        const proceed = window.confirm(
+          `Possible duplicate payment.\n\n` +
+            `You already sent a payment to this account and SWIFT code ${timeAgo(p.createdAt)} ` +
+            `(${p.currency} ${p.amount} — reference "${p.reference}").\n\n` +
+            `Do you still want to submit this payment?`,
+        );
+        if (!proceed) {
+          setMessage('Payment cancelled — possible duplicate.');
+          return;
+        }
+      }
+    } catch {
+      // The check is a convenience only; if it fails, never block a legitimate payment.
+    }
 
     try {
       const response = await createPayment(csrfToken, {
@@ -94,6 +148,10 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
       setPayments((current) => [response.payment, ...current]);
       setForm(initialForm);
       setStep(1);
+      step1Touches.resetTouched();
+      step2Touches.resetTouched();
+      setS1Errors({});
+      setS2Errors({});
       setMessage(response.message);
     } catch (err) {
       setSubmitError((err as Error).message);
@@ -118,7 +176,18 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
               Amount
               <input
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, amount: v });
+                  if (step1Touches.isTouched('amount')) {
+                    setFieldError(setS1Errors, 'amount', v, step1Patterns.amount.test(v), step1ErrorMsgs.amount);
+                  }
+                }}
+                onBlur={(e) => {
+                  step1Touches.markTouched('amount');
+                  const v = e.target.value;
+                  setFieldError(setS1Errors, 'amount', v, step1Patterns.amount.test(v), step1ErrorMsgs.amount);
+                }}
                 className={s1Errors.amount ? 'input-error' : ''}
                 inputMode="decimal"
                 placeholder="e.g. 1500.00"
@@ -130,13 +199,26 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
               Currency
               <select
                 value={form.currency}
-                onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, currency: v });
+                  if (step1Touches.isTouched('currency')) {
+                    setFieldError(setS1Errors, 'currency', v, currencyOk(v), step1ErrorMsgs.currency);
+                  }
+                }}
+                onBlur={(e) => {
+                  step1Touches.markTouched('currency');
+                  const v = e.target.value;
+                  setFieldError(setS1Errors, 'currency', v, currencyOk(v), step1ErrorMsgs.currency);
+                }}
+                className={s1Errors.currency ? 'input-error' : ''}
                 required
               >
                 {CURRENCIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
+              {s1Errors.currency && <span className="field-error">{s1Errors.currency}</span>}
             </label>
             <label>
               Payment provider
@@ -155,7 +237,30 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
               Beneficiary name
               <input
                 value={form.beneficiaryName}
-                onChange={(e) => setForm({ ...form, beneficiaryName: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, beneficiaryName: v });
+                  if (step2Touches.isTouched('beneficiaryName')) {
+                    setFieldError(
+                      setS2Errors,
+                      'beneficiaryName',
+                      v,
+                      step2Patterns.beneficiaryName.test(v),
+                      step2ErrorMsgs.beneficiaryName,
+                    );
+                  }
+                }}
+                onBlur={(e) => {
+                  step2Touches.markTouched('beneficiaryName');
+                  const v = e.target.value;
+                  setFieldError(
+                    setS2Errors,
+                    'beneficiaryName',
+                    v,
+                    step2Patterns.beneficiaryName.test(v),
+                    step2ErrorMsgs.beneficiaryName,
+                  );
+                }}
                 className={s2Errors.beneficiaryName ? 'input-error' : ''}
                 required
               />
@@ -165,7 +270,30 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
               Beneficiary account number
               <input
                 value={form.beneficiaryAccount}
-                onChange={(e) => setForm({ ...form, beneficiaryAccount: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, beneficiaryAccount: v });
+                  if (step2Touches.isTouched('beneficiaryAccount')) {
+                    setFieldError(
+                      setS2Errors,
+                      'beneficiaryAccount',
+                      v,
+                      step2Patterns.beneficiaryAccount.test(v),
+                      step2ErrorMsgs.beneficiaryAccount,
+                    );
+                  }
+                }}
+                onBlur={(e) => {
+                  step2Touches.markTouched('beneficiaryAccount');
+                  const v = e.target.value;
+                  setFieldError(
+                    setS2Errors,
+                    'beneficiaryAccount',
+                    v,
+                    step2Patterns.beneficiaryAccount.test(v),
+                    step2ErrorMsgs.beneficiaryAccount,
+                  );
+                }}
                 className={s2Errors.beneficiaryAccount ? 'input-error' : ''}
                 inputMode="numeric"
                 required
@@ -176,7 +304,18 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
               SWIFT / BIC code
               <input
                 value={form.swiftCode}
-                onChange={(e) => setForm({ ...form, swiftCode: e.target.value.toUpperCase() })}
+                onChange={(e) => {
+                  const v = e.target.value.toUpperCase();
+                  setForm({ ...form, swiftCode: v });
+                  if (step2Touches.isTouched('swiftCode')) {
+                    setFieldError(setS2Errors, 'swiftCode', v, step2Patterns.swiftCode.test(v), step2ErrorMsgs.swiftCode);
+                  }
+                }}
+                onBlur={(e) => {
+                  step2Touches.markTouched('swiftCode');
+                  const v = e.target.value.toUpperCase();
+                  setFieldError(setS2Errors, 'swiftCode', v, step2Patterns.swiftCode.test(v), step2ErrorMsgs.swiftCode);
+                }}
                 className={s2Errors.swiftCode ? 'input-error' : ''}
                 placeholder="e.g. FIRNZAJJ"
                 required
@@ -187,7 +326,18 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
               Reference
               <input
                 value={form.reference}
-                onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, reference: v });
+                  if (step2Touches.isTouched('reference')) {
+                    setFieldError(setS2Errors, 'reference', v, step2Patterns.reference.test(v), step2ErrorMsgs.reference);
+                  }
+                }}
+                onBlur={(e) => {
+                  step2Touches.markTouched('reference');
+                  const v = e.target.value;
+                  setFieldError(setS2Errors, 'reference', v, step2Patterns.reference.test(v), step2ErrorMsgs.reference);
+                }}
                 className={s2Errors.reference ? 'input-error' : ''}
                 required
               />

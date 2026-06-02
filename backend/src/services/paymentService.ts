@@ -109,6 +109,51 @@ export async function createPayment(userId: number, input: PaymentInput) {
   }
 }
 
+/**
+ * Duplicate-payment guard (UX safeguard, not a hard control):
+ * returns the most recent payment by this user to the SAME beneficiary account
+ * AND same SWIFT code within the last 24 hours, or undefined if none.
+ * Values are normalised to match how createPayment stores them.
+ */
+export async function findRecentSimilarPayment(
+  userId: number,
+  beneficiaryAccount: string,
+  swiftCode: string,
+) {
+  try {
+    const db = await dbPromise;
+    const account = beneficiaryAccount.replace(/\s/g, '').toUpperCase();
+    const swift = swiftCode.replace(/\s/g, '').toUpperCase();
+
+    // created_at is stored as UTC (SQLite CURRENT_TIMESTAMP); compare in the DB.
+    return await db.get<{
+      id: number;
+      beneficiaryName: string;
+      currency: string;
+      amount: number;
+      reference: string;
+      createdAt: string;
+    }>(
+      `SELECT id,
+              beneficiary_name as beneficiaryName,
+              currency,
+              amount,
+              reference,
+              created_at as createdAt
+       FROM payments
+       WHERE user_id = ?
+         AND beneficiary_account = ?
+         AND swift_code = ?
+         AND datetime(created_at) >= datetime('now', '-24 hours')
+       ORDER BY datetime(created_at) DESC
+       LIMIT 1`,
+      [userId, account, swift],
+    );
+  } catch (error) {
+    return handleServiceError(error, 'findRecentSimilarPayment', userId);
+  }
+}
+
 export async function getPaymentsForUser(userId: number) {
   try {
     // 🔐 Authorization: Query is scoped to userId from verified session

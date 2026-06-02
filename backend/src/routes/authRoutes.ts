@@ -1,8 +1,8 @@
 import { Router, type Response } from 'express';
 import { env, isProduction } from '../config/env.js';
 import { auditLog } from '../utils/auditLogger.js';
-import { loginSchema, registerSchema } from '../utils/validators.js';
-import { loginUser, registerUser, revokeToken, signJwt } from '../services/authService.js';
+import { loginSchema } from '../utils/validators.js';
+import { AccountLockedError, loginUser, revokeToken, signJwt } from '../services/authService.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { authRateLimit, csrfProtection } from '../middleware/security.js';
 
@@ -17,23 +17,13 @@ function setAuthCookie(res: Response, token: string) {
   });
 }
 
-authRouter.post('/register', authRateLimit, csrfProtection, async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body);
-  if (!parsed.success) {
-    auditLog('register_validation_failed', { ip: req.ip, issues: parsed.error.flatten() });
-    return res.status(400).json({
-      message: 'Invalid registration input.',
-      ...(isProduction ? {} : { errors: parsed.error.flatten() }),
-    });
-  }
-
-  try {
-    const user = await registerUser(parsed.data);
-    auditLog('register_success', { ip: req.ip, username: user.username });
-    return res.status(201).json({ message: 'Registration successful.', user });
-  } catch (error) {
-    return res.status(400).json({ message: (error as Error).message });
-  }
+// Self-registration is disabled by policy. All accounts are pre-provisioned by the bank.
+// Endpoint kept (returns 403 + audit event) so probes are logged rather than 404-ing.
+authRouter.post('/register', authRateLimit, (req, res) => {
+  auditLog('register_attempt_blocked', { ip: req.ip });
+  return res.status(403).json({
+    message: 'Self-registration is disabled. Contact your bank to provision an account.',
+  });
 });
 
 authRouter.post('/login', authRateLimit, csrfProtection, async (req, res) => {
@@ -53,6 +43,14 @@ authRouter.post('/login', authRateLimit, csrfProtection, async (req, res) => {
     auditLog('login_success', { ip: req.ip, username: user.username });
     return res.json({ message: 'Login successful.', user });
   } catch (error) {
+    if (error instanceof AccountLockedError) {
+      auditLog('login_blocked_account_locked', {
+        ip: req.ip,
+        username: parsed.data.username,
+        lockedUntil: error.lockedUntil.toISOString(),
+      });
+      return res.status(423).json({ message: error.message });
+    }
     auditLog('login_failed', { ip: req.ip, username: parsed.data.username });
     return res.status(401).json({ message: (error as Error).message });
   }
