@@ -12,15 +12,18 @@ export const validationPatterns = {
     password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]).{8,64}$/,
 
     // === PAYMENT FIELDS ===
-    beneficiaryName: /^[A-Za-z\s,'.\-]{2,100}$/,
+    // NOTE: these MUST stay consistent with the route-level contract in
+    // utils/validators.ts (and the frontend) — otherwise valid input that
+    // passes the route gets rejected here, in the service "defence-in-depth" layer.
+    beneficiaryName: /^[A-Za-z0-9 .,'-]{2,80}$/,
     iban: /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/,
     swiftCode: /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/,
     currency: /^[A-Z]{3}$/,
-    allowedCurrencies: ['USD', 'EUR', 'GBP', 'ZAR', 'AUD', 'CAD'] as const,
+    allowedCurrencies: ['ZAR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY', 'CHF', 'CNY'] as const,
     amount: /^\d+(\.\d{1,2})?$/,
     minAmount: 0.01,
     maxAmount: 1_000_000,
-    reference: /^[A-Za-z0-9\-_]{3,50}$/,
+    reference: /^[A-Za-z0-9 .,_-]{2,120}$/,
 };
 
 // ============================================================================
@@ -88,7 +91,7 @@ export const validators = {
         const sanitized = sanitizers.normalizeName(v);
         return validationPatterns.beneficiaryName.test(sanitized)
             ? { valid: true }
-            : { valid: false, error: 'Name allows letters, spaces, apostrophes, hyphens, periods, commas only' };
+            : { valid: false, error: 'Name must be 2-80 characters: letters, numbers, spaces, and . , \' - only' };
     },
 
     beneficiaryAccount: (v: unknown): ValidationResult => {
@@ -133,7 +136,7 @@ export const validators = {
         const sanitized = v.trim();
         return validationPatterns.reference.test(sanitized)
             ? { valid: true }
-            : { valid: false, error: 'Reference must be 3-50 alphanumeric characters, hyphens, or underscores only' };
+            : { valid: false, error: 'Reference must be 2-120 characters: letters, numbers, spaces, and . , _ - only' };
     },
 };
 

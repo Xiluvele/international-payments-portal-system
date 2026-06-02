@@ -24,8 +24,14 @@ function requireEmployee(req: Request, res: Response, next: NextFunction) {
 
 // Customer: get their own payments
 paymentRouter.get('/', async (req, res) => {
-  const payments = await getPaymentsForUser(req.user!.id);
-  return res.json({ payments });
+  // Wrapped: a service-layer throw here must return a clean error, not become an
+  // unhandled promise rejection that crashes the whole process (Node 22 behaviour).
+  try {
+    const payments = await getPaymentsForUser(req.user!.id);
+    return res.json({ payments });
+  } catch (error) {
+    return res.status(500).json({ message: (error as Error).message });
+  }
 });
 
 // Customer: submit a new payment
@@ -36,9 +42,16 @@ paymentRouter.post('/', paymentRateLimit, async (req, res) => {
     return res.status(400).json({ message: 'Invalid payment input.', errors: parsed.error.flatten() });
   }
 
-  const payment = await createPayment(req.user!.id, parsed.data);
-  auditLog('payment_created', { ip: req.ip, userId: req.user?.id, paymentId: payment?.id });
-  return res.status(201).json({ message: 'Payment submitted successfully.', payment });
+  // Wrapped: createPayment re-validates + hits the DB and throws on failure. Without
+  // this catch the rejection is unhandled and the entire server crashes (taking down
+  // login and every other route), instead of failing just this one request.
+  try {
+    const payment = await createPayment(req.user!.id, parsed.data);
+    auditLog('payment_created', { ip: req.ip, userId: req.user?.id, paymentId: payment?.id });
+    return res.status(201).json({ message: 'Payment submitted successfully.', payment });
+  } catch (error) {
+    return res.status(500).json({ message: (error as Error).message });
+  }
 });
 
 // Employee: get all payments across all customers
