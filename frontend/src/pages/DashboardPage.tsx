@@ -1,8 +1,19 @@
 import { useEffect, useState } from 'react';
-import { createPayment, fetchPayments } from '../api/payments';
+import { checkDuplicatePayment, createPayment, fetchPayments } from '../api/payments';
 import type { Payment, User } from '../types';
 import { useTouchedFields } from '../hooks/useTouchedFields';
 import { setFieldError } from '../utils/liveValidate';
+
+// Human-friendly "x ago" from a SQLite UTC timestamp (e.g. "2026-06-02 16:47:43").
+function timeAgo(sqliteUtc: string): string {
+  const then = new Date(sqliteUtc.replace(' ', 'T') + 'Z').getTime();
+  if (Number.isNaN(then)) return 'recently';
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (mins < 1) return 'less than a minute ago';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hrs = Math.round(mins / 60);
+  return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+}
 
 const CURRENCIES = ['ZAR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY', 'CHF', 'CNY'];
 
@@ -100,6 +111,30 @@ export function DashboardPage({ user, csrfToken }: { user: User; csrfToken: stri
       return;
     }
     setS2Errors({});
+
+    // 🟡 Duplicate-payment guard: warn if the same beneficiary account + SWIFT was
+    // already paid in the last 24h, and let the user decide whether to proceed.
+    try {
+      const dup = await checkDuplicatePayment(csrfToken, {
+        beneficiaryAccount: form.beneficiaryAccount,
+        swiftCode: form.swiftCode,
+      });
+      if (dup.duplicate && dup.previous) {
+        const p = dup.previous;
+        const proceed = window.confirm(
+          `Possible duplicate payment.\n\n` +
+            `You already sent a payment to this account and SWIFT code ${timeAgo(p.createdAt)} ` +
+            `(${p.currency} ${p.amount} — reference "${p.reference}").\n\n` +
+            `Do you still want to submit this payment?`,
+        );
+        if (!proceed) {
+          setMessage('Payment cancelled — possible duplicate.');
+          return;
+        }
+      }
+    } catch {
+      // The check is a convenience only; if it fails, never block a legitimate payment.
+    }
 
     try {
       const response = await createPayment(csrfToken, {

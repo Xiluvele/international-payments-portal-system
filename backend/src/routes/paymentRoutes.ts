@@ -4,12 +4,13 @@ import { auditLog } from '../utils/auditLogger.js';
 import { paymentRateLimit } from '../middleware/security.js';
 import {
   createPayment,
+  findRecentSimilarPayment,
   getAllPayments,
   getPaymentsForUser,
   submitPaymentsToSwift,
   verifyPayment,
 } from '../services/paymentService.js';
-import { paymentSchema } from '../utils/validators.js';
+import { paymentSchema, regexRules } from '../utils/validators.js';
 
 export const paymentRouter = Router();
 
@@ -29,6 +30,25 @@ paymentRouter.get('/', async (req, res) => {
   try {
     const payments = await getPaymentsForUser(req.user!.id);
     return res.json({ payments });
+  } catch (error) {
+    return res.status(500).json({ message: (error as Error).message });
+  }
+});
+
+// Customer: check for a recent similar payment (same beneficiary account + SWIFT
+// within the last 24h). GET so no CSRF token is needed — it's a read-only convenience
+// check used to warn the user before they submit a possible duplicate.
+paymentRouter.get('/check-duplicate', async (req, res) => {
+  const account = String(req.query.beneficiaryAccount ?? '').replace(/\s/g, '');
+  const swift = String(req.query.swiftCode ?? '').replace(/\s/g, '').toUpperCase();
+
+  if (!regexRules.accountNumber.test(account) || !regexRules.swiftCode.test(swift)) {
+    return res.status(400).json({ message: 'Invalid account or SWIFT code.' });
+  }
+
+  try {
+    const previous = await findRecentSimilarPayment(req.user!.id, account, swift);
+    return res.json({ duplicate: Boolean(previous), previous: previous ?? null });
   } catch (error) {
     return res.status(500).json({ message: (error as Error).message });
   }

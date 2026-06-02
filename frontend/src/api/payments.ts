@@ -147,6 +147,32 @@ export async function createPayment(
   }
 }
 
+// 🟡 Duplicate-payment guard: ask the backend whether this user already paid the
+// same beneficiary account + SWIFT within the last 24h, so we can warn before submit.
+export type RecentSimilarPayment = {
+  beneficiaryName: string;
+  currency: string;
+  amount: number;
+  reference: string;
+  createdAt: string;
+};
+
+export async function checkDuplicatePayment(
+  csrfToken: string,
+  payload: { beneficiaryAccount: string; swiftCode: string },
+) {
+  const account = payload.beneficiaryAccount.replace(/\s/g, '');
+  const swift = payload.swiftCode.toUpperCase().replace(/\s/g, '');
+  const qs = new URLSearchParams({ beneficiaryAccount: account, swiftCode: swift }).toString();
+
+  // No handleApiError here: the caller treats any failure as "no duplicate / proceed",
+  // so a failed convenience check never blocks a legitimate payment.
+  return apiFetch<{ duplicate: boolean; previous: RecentSimilarPayment | null }>(
+    `/api/payments/check-duplicate?${qs}`,
+    { ...createSecureRequestConfig(csrfToken) },
+  );
+}
+
 export async function fetchAllPayments(csrfToken: string) {
   try {
     return await apiFetch<{ payments: Payment[] }>('/api/payments/all', {
