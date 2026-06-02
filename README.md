@@ -53,13 +53,15 @@ Implemented protections include:
 
 ### 5. Demo video guidance
 Use OBS to record:
-1. Register a user
-2. Log in
-3. View CSRF-secured payment form
-4. Submit a valid payment
-5. Try invalid input and show validation blocking it
-6. Open browser dev tools and show the auth cookie is HttpOnly
-7. Show HTTPS running locally
+1. Log in with a pre-seeded customer account (no registration UI exists)
+2. Submit a valid payment via the CSRF-secured form
+3. Try invalid input and show validation blocking it on both client and server
+4. Open browser dev tools and show the auth cookie is HttpOnly + Secure + SameSite=Strict
+5. Show HTTPS running locally
+6. Log in as an employee, verify a payment, submit it to SWIFT
+7. Log out, then log in as the **Audit Admin** account to show the security-monitoring dashboard
+8. Deliberately fail login 5 times on a customer account to demonstrate account lockout (423) — then go back to the admin view and show the `login_blocked_account_locked` event appearing live
+9. Try to hit `/api/audit/recent` as the employee — show the 403 + `audit_access_denied` entry — to demonstrate least-privilege separation
 
 ## Project structure
 
@@ -97,7 +99,47 @@ Backend:
 - https://localhost:5001
 
 ### Demo users
-Create one through the Register page.
+
+> **Self-registration is disabled** by policy — the brief requires that no registration process is possible. All accounts are pre-provisioned on backend startup. `POST /api/auth/register` returns `403` and writes a `register_attempt_blocked` event to the audit log.
+
+**Pre-seeded employee accounts:**
+
+| Full name       | Login identifier (name or email)          | Account number | Password           |
+|---|---|---|---|
+| Bank Employee   | `Bank Employee` or `employee0@bank.local` | `10000000`     | `BankEmployee@1`   |
+| TalinUser       | `TalinUser` or `employee1@bank.local`     | `10000001`     | `BankEmployee@1`   |
+| NokubongaUser   | `NokubongaUser` or `employee2@bank.local` | `10000002`     | `BankEmployee@1`   |
+| SimaUser        | `SimaUser` or `employee3@bank.local`      | `10000003`     | `BankEmployee@1`   |
+
+**Pre-seeded customer accounts:**
+
+| Full name       | Login identifier (name or email)             | Account number | Password         |
+|---|---|---|---|
+| Jane Smith      | `Jane Smith` or `jane.smith@example.com`     | `20000001`     | `Customer@2026`  |
+| John Doe        | `John Doe` or `john.doe@example.com`         | `20000002`     | `Customer@2026`  |
+| Amara Naidoo    | `Amara Naidoo` or `amara.naidoo@example.com` | `20000003`     | `Customer@2026`  |
+
+**Pre-seeded administrator account (audit console only):**
+
+| Full name    | Login identifier (name or email)         | Account number | Password           |
+|---|---|---|---|
+| Audit Admin  | `Audit Admin` or `audit.admin@bank.local` | `30000001`     | `AuditAdmin@2026`  |
+
+Use the **exact full name** (case-sensitive) or the **email** shown, plus the matching **account number** and password.
+
+### Role separation (least privilege)
+
+| Role       | What they see                                                                 | What they cannot do |
+|---|---|---|
+| `customer` | Their own payments + the new-payment form                                     | View other customers, verify, see audit log |
+| `employee` | All customer payments, verify, submit batch to SWIFT                          | View audit log |
+| `admin`    | Append-only security audit log + summary counters (read-only)                 | View or process payments |
+
+The audit endpoint `/api/audit/recent` enforces `role === 'admin'`. Any non-admin attempt is rejected with HTTP `403` and writes an `audit_access_denied` event. Successful admin reads also write an `audit_log_viewed` event — so the audit trail records who watched it.
+
+### Account lockout
+
+After **5 consecutive failed login attempts** on the same account, the account is locked for **15 minutes**. Locked logins respond with HTTP `423 Locked` and a `login_blocked_account_locked` audit event. A successful login clears the counter. This is independent of the per-IP rate limit and protects against slow distributed credential-stuffing attacks.
 
 ## Repository scripts
 

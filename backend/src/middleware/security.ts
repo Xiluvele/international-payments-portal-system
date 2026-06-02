@@ -54,10 +54,11 @@ export function applySecurity(app: Express) {
   );
 }
 
-// Stricter limiter for login and register — 10 attempts per 15 minutes.
+// Stricter limiter for login and register.
+// In development the limit is higher so local testing and demos are not blocked by retries.
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: isProduction ? 10 : 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many attempts. Please try again later.' },

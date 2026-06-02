@@ -3,11 +3,18 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { dbPromise } from './db.js';
 import { env } from '../config/env.js';
-import type { LoginInput, RegisterInput } from '../utils/validators.js';
+import type { LoginInput } from '../utils/validators.js';
 
 const SALT_ROUNDS = 12;
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
 
-const WEAK_PASSWORDS = ['Password1!', 'Admin123!', 'Welcome1@'];
+export class AccountLockedError extends Error {
+  constructor(public readonly lockedUntil: Date) {
+    super('Account temporarily locked due to repeated failed login attempts. Try again later.');
+    this.name = 'AccountLockedError';
+  }
+}
 
 // jti -> expiry timestamp (ms). Pruned on each verify to prevent unbounded growth.
 const tokenBlacklist = new Map<string, number>();
@@ -31,77 +38,55 @@ export function revokeToken(token: string) {
   }
 }
 
-export async function registerUser(input: RegisterInput) {
+export async function seedAccounts() {
   const db = await dbPromise;
-  const existing = await db.get('SELECT id FROM users WHERE username = ?', input.accountNumber);
-
-  if (existing) {
-    throw new Error('Account number already registered.');
-  }
-
-  const existingEmail = await db.get('SELECT id FROM users WHERE email = ?', input.email);
-  if (existingEmail) {
-    throw new Error('Email address already registered.');
-  }
-
-  if (WEAK_PASSWORDS.includes(input.password)) {
-    throw new Error('Password is too common. Choose a stronger one.');
-  }
-
-  const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-  const result = await db.run(
-    'INSERT INTO users (username, email, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
-    input.accountNumber,
-    input.email,
-    input.fullName,
-    input.idNumber,
-    passwordHash,
-    'customer',
-  );
-
-  return {
-    id: result.lastID,
-    username: input.accountNumber,
-    fullName: input.fullName,
-    role: 'customer',
-  };
-}
-
-export async function seedEmployees() {
-  const db = await dbPromise;
-  const hash = await bcrypt.hash('BankEmployee@1', SALT_ROUNDS);
+  const employeeHash = await bcrypt.hash('BankEmployee@1', SALT_ROUNDS);
+  const customerHash = await bcrypt.hash('Customer@2026', SALT_ROUNDS);
+  const adminHash = await bcrypt.hash('AuditAdmin@2026', SALT_ROUNDS);
 
   const employees = [
-    { username: '10000000', email: 'employee0@bank.local', fullName: 'Bank Employee',    idNumber: '0000000000000' },
-    { username: '10000001', email: 'employee1@bank.local', fullName: 'TalinUser',        idNumber: '0000000000001' },
-    { username: '10000002', email: 'employee2@bank.local', fullName: 'NokubongaUser',    idNumber: '0000000000002' },
-    { username: '10000003', email: 'employee3@bank.local', fullName: 'SimaUser',         idNumber: '0000000000003' },
+    { username: '10000000', email: 'employee0@bank.local', fullName: 'Bank Employee',    idNumber: '0000000000000', hash: employeeHash, role: 'employee' as const },
+    { username: '10000001', email: 'employee1@bank.local', fullName: 'TalinUser',        idNumber: '0000000000001', hash: employeeHash, role: 'employee' as const },
+    { username: '10000002', email: 'employee2@bank.local', fullName: 'NokubongaUser',    idNumber: '0000000000002', hash: employeeHash, role: 'employee' as const },
+    { username: '10000003', email: 'employee3@bank.local', fullName: 'SimaUser',         idNumber: '0000000000003', hash: employeeHash, role: 'employee' as const },
   ];
 
+  const customers = [
+    { username: '20000001', email: 'jane.smith@example.com',  fullName: 'Jane Smith',  idNumber: '9001010001081', hash: customerHash, role: 'customer' as const },
+    { username: '20000002', email: 'john.doe@example.com',    fullName: 'John Doe',    idNumber: '9203030002082', hash: customerHash, role: 'customer' as const },
+    { username: '20000003', email: 'amara.naidoo@example.com', fullName: 'Amara Naidoo', idNumber: '8807070003083', hash: customerHash, role: 'customer' as const },
+  ];
+
+  const admins = [
+    { username: '30000001', email: 'audit.admin@bank.local', fullName: 'Audit Admin', idNumber: '7506060001084', hash: adminHash, role: 'admin' as const },
+  ];
+
+  const all = [...employees, ...customers, ...admins];
+
   let seededAny = false;
-  for (const emp of employees) {
-    const existing = await db.get('SELECT id FROM users WHERE username = ?', emp.username);
+  for (const acc of all) {
+    const existing = await db.get('SELECT id FROM users WHERE username = ?', acc.username);
     if (!existing) {
       await db.run(
         'INSERT INTO users (username, email, full_name, id_number, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
-        emp.username,
-        emp.email,
-        emp.fullName,
-        emp.idNumber,
-        hash,
-        'employee',
+        acc.username,
+        acc.email,
+        acc.fullName,
+        acc.idNumber,
+        acc.hash,
+        acc.role,
       );
       seededAny = true;
     }
   }
 
   if (seededAny) {
-    console.log('\n--- Employee accounts seeded ---');
-    for (const emp of employees) {
-      console.log(`  Full name: ${emp.fullName.padEnd(16)} Account: ${emp.username}`);
+    console.log('\n--- Accounts seeded (no self-registration is permitted) ---');
+    for (const acc of all) {
+      console.log(`  [${acc.role.padEnd(8)}] ${acc.fullName.padEnd(16)} Account: ${acc.username}`);
     }
-    console.log('  (See deployment docs for credentials)');
-    console.log('--------------------------------\n');
+    console.log('  (Credentials documented in README)');
+    console.log('-----------------------------------------------------------\n');
   }
 }
 
@@ -114,8 +99,12 @@ export async function loginUser(input: LoginInput) {
     full_name: string;
     role: string;
     password_hash: string;
+    failed_login_attempts: number;
+    locked_until: string | null;
   }>(
-    'SELECT id, username, email, full_name, role, password_hash FROM users WHERE (full_name = ? OR email = ?) AND username = ?',
+    `SELECT id, username, email, full_name, role, password_hash,
+            failed_login_attempts, locked_until
+     FROM users WHERE (full_name = ? OR email = ?) AND username = ?`,
     input.username,
     input.username,
     input.accountNumber,
@@ -125,9 +114,40 @@ export async function loginUser(input: LoginInput) {
     throw new Error('Invalid username or password.');
   }
 
+  if (user.locked_until) {
+    const lockedUntil = new Date(user.locked_until);
+    if (lockedUntil.getTime() > Date.now()) {
+      throw new AccountLockedError(lockedUntil);
+    }
+  }
+
   const isValid = await bcrypt.compare(input.password, user.password_hash);
   if (!isValid) {
+    const nextAttempts = user.failed_login_attempts + 1;
+    if (nextAttempts >= MAX_FAILED_ATTEMPTS) {
+      const lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
+      await db.run(
+        'UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?',
+        nextAttempts,
+        lockedUntil.toISOString(),
+        user.id,
+      );
+      throw new AccountLockedError(lockedUntil);
+    }
+    await db.run(
+      'UPDATE users SET failed_login_attempts = ? WHERE id = ?',
+      nextAttempts,
+      user.id,
+    );
     throw new Error('Invalid username or password.');
+  }
+
+  // Reset counters on a successful login
+  if (user.failed_login_attempts > 0 || user.locked_until) {
+    await db.run(
+      'UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?',
+      user.id,
+    );
   }
 
   return {

@@ -29,6 +29,8 @@ export async function initDb() {
   try { await db.exec(`ALTER TABLE users ADD COLUMN id_number TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
   try { await db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'customer'`); } catch { /* exists */ }
   try { await db.exec(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { await db.exec(`ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0`); } catch { /* exists */ }
+  try { await db.exec(`ALTER TABLE users ADD COLUMN locked_until TEXT`); } catch { /* exists */ }
 
   // Ensure email uniqueness for non-empty emails (SQLite doesn't support adding UNIQUE constraints via ALTER TABLE)
   try { await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email <> ''`); } catch { /* exists */ }

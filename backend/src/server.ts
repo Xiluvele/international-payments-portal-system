@@ -4,11 +4,11 @@ import path from 'node:path';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { initDb } from './services/db.js';
-import { seedEmployees } from './services/authService.js';
+import { seedAccounts } from './services/authService.js';
 
 async function start() {
   await initDb();
-  await seedEmployees();
+  await seedAccounts();
 
   const app = createApp();
 

@@ -20,7 +20,6 @@ export function Layout({ children, user, onLogout }: PropsWithChildren<{ user: U
         </div>
         <nav>
           <Link to="/">Dashboard</Link>
-          {!user && <Link to="/register">Register</Link>}
           {!user && <Link to="/login">Login</Link>}
           {user && <button onClick={handleLogout}>Logout</button>}
         </nav>

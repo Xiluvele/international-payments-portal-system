@@ -1,17 +1,6 @@
 import { apiFetch } from './client';
 import type { User } from '../types';
 
-export async function registerUser(
-  csrfToken: string,
-  payload: { fullName: string; idNumber: string; accountNumber: string; password: string },
-) {
-  return apiFetch<{ message: string; user: User }>('/api/auth/register', {
-    method: 'POST',
-    headers: { 'CSRF-Token': csrfToken },
-    body: JSON.stringify(payload),
-  });
-}
-
 export async function loginUser(
   csrfToken: string,
   payload: { username: string; accountNumber: string; password: string },

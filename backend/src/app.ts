@@ -1,5 +1,6 @@
 import express from 'express';
 import { applySecurity, csrfProtection } from './middleware/security.js';
+import { auditRouter } from './routes/auditRoutes.js';
 import { authRouter } from './routes/authRoutes.js';
 import { paymentRouter } from './routes/paymentRoutes.js';
 import { securityRouter } from './routes/securityRoutes.js';
@@ -21,6 +22,7 @@ export function createApp() {
   app.use('/api/security', securityRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/payments', csrfProtection, paymentRouter);
+  app.use('/api/audit', auditRouter);
 
   app.use(errorHandler);
 
